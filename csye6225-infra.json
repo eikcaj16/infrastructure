@@ -1,0 +1,343 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CSYE 6225 Assignment 3",
+    "Parameters":
+    {
+        "VpcCidrBlock":
+        {
+            "Description": "CIDR block for VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16"
+        },
+        "Subnet1CidrBlock":
+        {
+            "Description": "CIDR block for Subnet 1",
+            "Type": "String",
+            "Default": "10.0.0.0/24"
+        },
+        "Subnet2CidrBlock":
+        {
+            "Description": "CIDR block for Subnet 2",
+            "Type": "String",
+            "Default": "10.0.1.0/24"
+        },
+        "Subnet3CidrBlock":
+        {
+            "Description": "CIDR block for Subnet 3",
+            "Type": "String",
+            "Default": "10.0.2.0/24"
+        },
+        "RouteDestinationCidrBlock":
+        {
+            "Description": "Description CIDR block for Route",
+            "Type": "String",
+            "Default": "0.0.0.0/0"
+        }
+    },
+    "Resources":
+    {
+        "myVPC":
+        {
+            "Type": "AWS::EC2::VPC",
+            "Properties":
+            {
+                "CidrBlock":
+                {
+                    "Ref": "VpcCidrBlock"
+                },
+                "EnableDnsSupport": "true",
+                "EnableDnsHostnames": "true",
+                "InstanceTenancy": "default",
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "mySubnet1":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "Subnet1CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "0",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "mySubnet2":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "Subnet2CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "1",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "mySubnet3":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "Subnet3CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "2",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "myInternetGateway":
+        {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties":
+            {
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway":
+        {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "InternetGatewayId":
+                {
+                    "Ref": "myInternetGateway"
+                }
+            }
+        },
+        "myRouteTable":
+        {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "mySubnet1RouteTableAssociation":
+        {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":
+            {
+                "SubnetId":
+                {
+                    "Ref": "mySubnet1"
+                },
+                "RouteTableId":
+                {
+                    "Ref": "myRouteTable"
+                }
+            }
+        },
+        "mySubnet2RouteTableAssociation":
+        {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":
+            {
+                "SubnetId":
+                {
+                    "Ref": "mySubnet2"
+                },
+                "RouteTableId":
+                {
+                    "Ref": "myRouteTable"
+                }
+            }
+        },
+        "mySubnet3RouteTableAssociation":
+        {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":
+            {
+                "SubnetId":
+                {
+                    "Ref": "mySubnet3"
+                },
+                "RouteTableId":
+                {
+                    "Ref": "myRouteTable"
+                }
+            }
+        },
+        "myRoute":
+        {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties":
+            {
+                "RouteTableId":
+                {
+                    "Ref": "myRouteTable"
+                },
+                "DestinationCidrBlock":
+                {
+                    "Ref": "RouteDestinationCidrBlock"
+                },
+                "GatewayId":
+                {
+                    "Ref": "myInternetGateway"
+                }
+            }
+        }
+    },
+    "Outputs":
+    {
+        "VpcId":
+        {
+            "Description": "VPC ID",
+            "Value":
+            {
+                "Ref": "myVPC"
+            }
+        },
+        "Subnet1Id":
+        {
+            "Description": "Subnet 1 ID",
+            "Value":
+            {
+                "Ref": "mySubnet1"
+            }
+        },
+        "Subnet2Id":
+        {
+            "Description": "Subnet 2 ID",
+            "Value":
+            {
+                "Ref": "mySubnet2"
+            }
+        },
+        "Subnet3Id":
+        {
+            "Description": "Subnet 3 ID",
+            "Value":
+            {
+                "Ref": "mySubnet3"
+            }
+        },
+        "InternetGatewayId":
+        {
+            "Description": "Internet Gateway ID",
+            "Value":
+            {
+                "Ref": "myInternetGateway"
+            }
+        },
+        "RouteTableId":
+        {
+            "Description": "Route Table ID",
+            "Value":
+            {
+                "Ref": "myRouteTable"
+            }
+        },
+        "RouteId":
+        {
+            "Description": "Route ID",
+            "Value":
+            {
+                "Ref": "myRoute"
+            }
+        }
+    }
+}
