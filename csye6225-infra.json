@@ -37,7 +37,7 @@
         {
             "Description": "AMI Id",
             "Type": "String",
-            "Default": "ami-"
+            "Default": "ami-09205eee4bc9965d0"
         }
     },
     "Resources":
