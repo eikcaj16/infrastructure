@@ -32,6 +32,12 @@
             "Description": "Description CIDR block for Route",
             "Type": "String",
             "Default": "0.0.0.0/0"
+        },
+        "AmiId":
+        {
+            "Description": "AMI Id",
+            "Type": "String",
+            "Default": "ami-09205eee4bc9965d0"
         }
     },
     "Resources":
@@ -83,6 +89,7 @@
                         }
                     ]
                 },
+                "MapPublicIpOnLaunch": true,
                 "Tags":
                 [
                     {
@@ -277,6 +284,82 @@
                 "GatewayId":
                 {
                     "Ref": "myInternetGateway"
+                }
+            }
+        },
+        "appSecurityGroup":
+        {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties":
+            {
+                "GroupDescription": "APP Security Group",
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "SecurityGroupEgress":
+                [
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupIngress":
+                [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "MyEC2Instance":
+        {
+            "Type": "AWS::EC2::Instance",
+            "Properties":
+            {
+                "BlockDeviceMappings":
+                [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs":
+                        {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "20"
+                        }
+                    }
+                ],
+                "SecurityGroupIds":
+                [
+                    {
+                        "Ref": "appSecurityGroup"
+                    }
+                ],
+                "ImageId":
+                {
+                    "Ref": "AmiId"
+                },
+                "InstanceType": "t2.micro",
+                "SubnetId":
+                {
+                    "Ref": "mySubnet1"
                 }
             }
         }
