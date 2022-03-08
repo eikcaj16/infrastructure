@@ -360,6 +360,20 @@
                 "SubnetId":
                 {
                     "Ref": "mySubnet1"
+                },
+                "UserData":
+                {
+                    "Fn::Base64":
+                    {
+                        "Fn::Join":
+                        [
+                            "\n",
+                            [
+                                "#!/bin/bash -xe",
+                                "sudo reboot"
+                            ]
+                        ]
+                    }
                 }
             }
         }
