@@ -1,0 +1,368 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CSYE 6225 Assignment 5
+Parameters:
+  VpcCidrBlock:
+    Description: CIDR block for VPC
+    Type: String
+    Default: 10.0.0.0/16
+  Subnet1CidrBlock:
+    Description: CIDR block for Subnet 1
+    Type: String
+    Default: 10.0.0.0/24
+  Subnet2CidrBlock:
+    Description: CIDR block for Subnet 2
+    Type: String
+    Default: 10.0.1.0/24
+  Subnet3CidrBlock:
+    Description: CIDR block for Subnet 3
+    Type: String
+    Default: 10.0.2.0/24
+  RdsSubnet1CidrBlock:
+    Description: CIDR block for RDS Subnet 1
+    Type: String
+    Default: 10.0.4.0/24
+  RdsSubnet2CidrBlock:
+    Description: CIDR block for RDS Subnet 2
+    Type: String
+    Default: 10.0.5.0/24
+  RdsSubnet3CidrBlock:
+    Description: CIDR block for RDS Subnet 3
+    Type: String
+    Default: 10.0.6.0/24
+  RouteDestinationCidrBlock:
+    Description: Description CIDR block for Route
+    Type: String
+    Default: 0.0.0.0/0
+  AmiId:
+    Description: AMI Id
+    Type: String
+    Default: ami-09205eee4bc9965d0
+  Environment:
+    Description: Environent (dev/prod)
+    Type: String
+    Default: dev
+  DbPassword:
+    Description: RDS DB Password
+    Type: String
+    Default: csYe_yiQing_6225
+  DbName:
+    Description: RDS DB name, username, and instance identifier
+    Type: String
+    Default: csye6225
+Resources:
+  myVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  mySubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref Subnet1CidrBlock
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  mySubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref Subnet2CidrBlock
+      AvailabilityZone: !Select 
+        - '1'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  mySubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref Subnet3CidrBlock
+      AvailabilityZone: !Select 
+        - '2'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  myRdsSubnet1: # RDS Subnet
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref RdsSubnet1CidrBlock
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  myRdsSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref RdsSubnet2CidrBlock
+      AvailabilityZone: !Select 
+        - '1'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  myRdsSubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref RdsSubnet3CidrBlock
+      AvailabilityZone: !Select 
+        - '2'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  myInternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+  myRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: Public
+  myRdsRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: Private
+  mySubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref mySubnet1
+      RouteTableId: !Ref myRouteTable
+  mySubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref mySubnet2
+      RouteTableId: !Ref myRouteTable
+  mySubnet3RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref mySubnet3
+      RouteTableId: !Ref myRouteTable
+  myRdsSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref myRdsSubnet1
+      RouteTableId: !Ref myRdsRouteTable
+  myRdsSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref myRdsSubnet2
+      RouteTableId: !Ref myRdsRouteTable
+  myRdsSubnet3RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref myRdsSubnet3
+      RouteTableId: !Ref myRdsRouteTable
+  myRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref myRouteTable
+      DestinationCidrBlock: !Ref RouteDestinationCidrBlock
+      GatewayId: !Ref myInternetGateway
+  # myRdsRoute:
+  #   Type: 'AWS::EC2::Route'
+  #   Properties:
+  #     RouteTableId: !Ref myRdsRouteTable
+      # DestinationCidrBlock: !Ref RouteDestinationCidrBlock
+  appSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: APP Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  rdsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: RDS Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+  MyS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Join ['.', [!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]], !Ref Environment, 'yiqingjackiehuang.me']]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: KMS-KEY-ARN
+      LifecycleConfiguration:
+        Rules:
+          - Id: Rule for TOs from STANDARD to STANDARD_IA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+  myRdsDbSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Subnet Group for DB (including myRdsSubnet[1-3])
+      SubnetIds:
+        - !Ref myRdsSubnet1
+        - !Ref myRdsSubnet2
+        - !Ref myRdsSubnet3
+  myRdsDbSecurityGroup:
+    Type: 'AWS::RDS::DBSecurityGroup'
+    Properties:
+      GroupDescription: Security Group for DB (attach )
+      EC2VpcId: !Ref myVPC
+      DBSecurityGroupIngress:
+        - EC2SecurityGroupId: !Ref rdsSecurityGroup
+  myRdsDbParameterGroup:
+    Type: 'AWS::RDS::DBParameterGroup'
+    Properties:
+      Description: MySQL Parameter Group
+      Family: mysql5.7
+  myRdsDbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBParameterGroupName: !Ref myRdsDbParameterGroup
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      Engine: MySQL
+      EngineVersion: 5.7
+      MultiAZ: false
+      DBInstanceIdentifier: !Ref DbName
+      MasterUsername: !Ref DbName
+      MasterUserPassword: !Ref DbPassword
+      DBSubnetGroupName: !Ref myRdsDbSubnetGroup
+      PubliclyAccessible: false
+      DBName: !Ref DbName
+      DBSecurityGroups:
+        - !Ref myRdsDbSecurityGroup
+  myIamPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: WebAppS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+              - 's3:Put*'
+              - 's3:DeleteObject*'
+            Resource:
+              - !GetAtt MyS3Bucket.Arn
+              - !Join ['', [!GetAtt MyS3Bucket.Arn, '/*']]
+  myIamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Description: EC2-CSYE6225 IAM Role
+      RoleName: EC2-CSYE6225
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Ref myIamPolicy
+  myIamInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: EC2-CSYE6225-Instance-Profile
+      Path: /
+      Roles:
+        - !Ref myIamRole
+  MyEC2Instance:
+    DependsOn: myRdsDbInstance
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: 'true'
+            VolumeSize: '20'
+      SecurityGroupIds:
+        - !Ref appSecurityGroup
+      ImageId: !Ref AmiId
+      InstanceType: t2.micro
+      SubnetId: !Ref mySubnet1
+      IamInstanceProfile: !Ref myIamInstanceProfile
+      UserData: !Base64 
+        'Fn::Join':
+          - '\n'
+          - - '#!/bin/bash -xe'
+            - echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}$\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
+            - sudo reboot
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref myVPC
+  Subnet1Id:
+    Description: Subnet 1 ID
+    Value: !Ref mySubnet1
+  Subnet2Id:
+    Description: Subnet 2 ID
+    Value: !Ref mySubnet2
+  Subnet3Id:
+    Description: Subnet 3 ID
+    Value: !Ref mySubnet3
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref myInternetGateway
+  RouteTableId:
+    Description: Route Table ID
+    Value: !Ref myRouteTable
+  RouteId:
+    Description: Route ID
+    Value: !Ref myRoute

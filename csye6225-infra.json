@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "CSYE 6225 Assignment 3",
+    "Description": "CSYE 6225 Assignment 5",
     "Parameters":
     {
         "VpcCidrBlock":
@@ -26,6 +26,24 @@
             "Description": "CIDR block for Subnet 3",
             "Type": "String",
             "Default": "10.0.2.0/24"
+        },
+        "RdsSubnet1CidrBlock":
+        {
+            "Description": "CIDR block for RDS Subnet 1",
+            "Type": "String",
+            "Default": "10.0.4.0/24"
+        },
+        "RdsSubnet2CidrBlock":
+        {
+            "Description": "CIDR block for RDS Subnet 2",
+            "Type": "String",
+            "Default": "10.0.5.0/24"
+        },
+        "RdsSubnet3CidrBlock":
+        {
+            "Description": "CIDR block for RDS Subnet 3",
+            "Type": "String",
+            "Default": "10.0.6.0/24"
         },
         "RouteDestinationCidrBlock":
         {
@@ -149,6 +167,111 @@
                 "CidrBlock":
                 {
                     "Ref": "Subnet3CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "2",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "myRdsSubnet1":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "RdsSubnet1CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "0",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "myRdsSubnet2":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "RdsSubnet2CidrBlock"
+                },
+                "AvailabilityZone":
+                {
+                    "Fn::Select":
+                    [
+                        "1",
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags":
+                [
+                    {
+                        "Key": "Name",
+                        "Value":
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "myRdsSubnet3":
+        {
+            "Type": "AWS::EC2::Subnet",
+            "Properties":
+            {
+                "VpcId":
+                {
+                    "Ref": "myVPC"
+                },
+                "CidrBlock":
+                {
+                    "Ref": "RdsSubnet3CidrBlock"
                 },
                 "AvailabilityZone":
                 {
