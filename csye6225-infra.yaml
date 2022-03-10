@@ -204,6 +204,11 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: '-1'
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+          # DestinationSecurityGroupId: !Ref rdsSecurityGroup
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -226,7 +231,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 0.0.0.0/0
+          # CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref appSecurityGroup
   MyS3Bucket:
     Type: 'AWS::S3::Bucket'
     DeletionPolicy: Delete
@@ -257,7 +263,7 @@ Resources:
       GroupDescription: Security Group for DB (attach )
       EC2VpcId: !Ref myVPC
       DBSecurityGroupIngress:
-        - EC2SecurityGroupId: !Ref rdsSecurityGroup
+        - EC2SecurityGroupId: !Ref appSecurityGroup
   myRdsDbParameterGroup:
     Type: 'AWS::RDS::DBParameterGroup'
     Properties:
@@ -340,13 +346,21 @@ Resources:
       InstanceType: t2.micro
       SubnetId: !Ref mySubnet1
       IamInstanceProfile: !Ref myIamInstanceProfile
-      UserData: !Base64 
-        'Fn::Join':
-          - '\n'
-          - - '#!/bin/bash -xe'
-            - !Join ['', ['echo "DB_Username=', !Ref DbName, '\nDB_pw=', !Ref DbPassword, '\nDB_hostname=', !GetAtt myRdsDbInstance.Endpoint.Address, '\nS3_bucket=', !GetAtt MyS3Bucket.Arn, '" >> info.txt']]
-            - ls
-            # - sudo reboot
+      UserData: # sudo reboot
+        'Fn::Base64':
+          !Sub |
+            #!/bin/bash -xe
+            cd /home/ec2-user/webservice
+            sed -i -e 's/"NAME": "webservice_db"/"NAME": "${DbName}"/' ./django_project_1/settings.py
+            sed -i -e 's/"USER": "root"/"USER": "${DbName}"/' ./django_project_1/settings.py
+            sed -i -e 's/"PASSWORD": "abc12345"/"PASSWORD": "${DbPassword}"/' ./django_project_1/settings.py
+            sed -i -e 's/"HOST": "127.0.0.1"/"HOST": "${myRdsDbInstance.Endpoint.Address}"/' ./django_project_1/settings.py
+            sed -i -e 's/AWS_STORAGE_BUCKET_NAME = ""/AWS_STORAGE_BUCKET_NAME = "${MyS3Bucket.Arn}"/' ./django_project_1/settings.py
+            sed -i -e 's/arn:aws:s3::://' ./django_project_1/settings.py
+            echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
+            ls
+            sudo reboot
+
 Outputs:
   VpcId:
     Description: VPC ID
