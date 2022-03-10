@@ -235,8 +235,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
-              KMSMasterKeyID: KMS-KEY-ARN
+              SSEAlgorithm: 'AES256'
       LifecycleConfiguration:
         Rules:
           - Id: Rule for TOs from STANDARD to STANDARD_IA
@@ -294,6 +293,9 @@ Resources:
               - 's3:List*'
               - 's3:Put*'
               - 's3:DeleteObject*'
+              - 's3:PutObjectAcl'
+              - 's3:ListMultipartUploadParts'
+              - 's3:AbortMultipartUpload'
             Resource:
               - !GetAtt MyS3Bucket.Arn
               - !Join ['', [!GetAtt MyS3Bucket.Arn, '/*']]
@@ -342,8 +344,9 @@ Resources:
         'Fn::Join':
           - '\n'
           - - '#!/bin/bash -xe'
-            - echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}$\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
-            - sudo reboot
+            - !Join ['', ['echo "DB_Username=', !Ref DbName, '\nDB_pw=', !Ref DbPassword, '\nDB_hostname=', !GetAtt myRdsDbInstance.Endpoint.Address, '\nS3_bucket=', !GetAtt MyS3Bucket.Arn, '" >> info.txt']]
+            - ls
+            # - sudo reboot
 Outputs:
   VpcId:
     Description: VPC ID
