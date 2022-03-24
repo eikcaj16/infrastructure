@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CSYE 6225 Assignment 5
+Description: CSYE 6225 Assignment 6
 Parameters:
   VpcCidrBlock:
     Description: CIDR block for VPC
@@ -49,6 +49,10 @@ Parameters:
     Description: RDS DB name, username, and instance identifier
     Type: String
     Default: csye6225
+  DomainName:
+    Description: Domain Name
+    Type: String
+    Default: yiqingjackiehuang.me
 Resources:
   myVPC:
     Type: 'AWS::EC2::VPC'
@@ -80,6 +84,7 @@ Resources:
       AvailabilityZone: !Select 
         - '1'
         - !GetAZs ''
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: !Ref 'AWS::StackName'
@@ -213,15 +218,17 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          # CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref loadBalancerSecurityGroup
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
+          # CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref loadBalancerSecurityGroup
+        # - IpProtocol: tcp
+        #   FromPort: 443
+        #   ToPort: 443
+        #   CidrIp: 0.0.0.0/0
   rdsSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -233,6 +240,21 @@ Resources:
           ToPort: 3306
           # CidrIp: 0.0.0.0/0
           SourceSecurityGroupId: !Ref appSecurityGroup
+  loadBalancerSecurityGroup:
+    DependsOn: myInternetGateway
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Load Balancer Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
   MyS3Bucket:
     Type: 'AWS::S3::Bucket'
     DeletionPolicy: Delete
@@ -326,22 +348,24 @@ Resources:
       Path: /
       Roles:
         - !Ref myIamRole
-  MyEC2Instance:
-    DependsOn: myRdsDbInstance
-    Type: 'AWS::EC2::Instance'
+  MyEC2LaunchConfig:
+    # DependsOn: myRdsDbInstance
+    Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
+      LaunchConfigurationName: asg_launch_config
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeType: gp2
             DeleteOnTermination: 'true'
             VolumeSize: '20'
-      SecurityGroupIds:
-        - !Ref appSecurityGroup
       ImageId: !Ref AmiId
       InstanceType: t2.micro
-      SubnetId: !Ref mySubnet1
+      KeyName: csye6225_aws
+      AssociatePublicIpAddress: True
       IamInstanceProfile: !Ref myIamInstanceProfile
+      SecurityGroups:
+        - !Ref appSecurityGroup
       UserData: # sudo reboot
         'Fn::Base64':
           !Sub |
@@ -356,6 +380,137 @@ Resources:
             echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
             ls
             sudo reboot
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Scale-up if average cpu > 5% for 1 min"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 30
+      EvaluationPeriods: 2
+      Threshold: 5
+      AlarmActions:
+        - !Ref MyAppScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref MyEC2AutoScalingGroup
+      ComparisonOperator: GreaterThanThreshold
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Scale-up if average cpu < 3% for 1 min"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 30
+      EvaluationPeriods: 2
+      Threshold: 3
+      AlarmActions:
+        - !Ref MyAppScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref MyEC2AutoScalingGroup
+      ComparisonOperator: LessThanThreshold
+  MyEC2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 1
+      MaxSize: 5
+      Cooldown: 60
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - !Ref mySubnet1
+        # - !Ref mySubnet2
+      AvailabilityZones:
+        - us-east-1a
+      LaunchConfigurationName: !Ref MyEC2LaunchConfig
+      TargetGroupARNs:
+        - !Ref MyAppLoadBalancerTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+          PropagateAtLaunch: true
+  MyAppScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyEC2AutoScalingGroup
+      ScalingAdjustment: 1
+  MyAppScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyEC2AutoScalingGroup
+      ScalingAdjustment: -1
+  MyAppLoadBalancer:
+    DependsOn: AttachGateway
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref mySubnet1
+        - !Ref mySubnet2
+      SecurityGroups:
+        - !Ref loadBalancerSecurityGroup
+  MyAppLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyAppLoadBalancerTargetGroup
+      LoadBalancerArn: !Ref MyAppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  MyAppLoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref myVPC
+  MyDNSGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: !Join [ ".", [!Ref Environment, !Ref DomainName, '']]
+      RecordSets:
+        - Name: !Join [ ".", [!Ref Environment, !Ref DomainName]]
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt MyAppLoadBalancer.CanonicalHostedZoneID
+            DNSName: !GetAtt MyAppLoadBalancer.DNSName
+  # MyEC2Instance:
+  #   DependsOn: myRdsDbInstance
+  #   Type: 'AWS::EC2::Instance'
+  #   Properties:
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeType: gp2
+  #           DeleteOnTermination: 'true'
+  #           VolumeSize: '20'
+  #     SecurityGroupIds:
+  #       - !Ref appSecurityGroup
+  #     ImageId: !Ref AmiId
+  #     InstanceType: t2.micro
+  #     SubnetId: !Ref mySubnet1
+  #     IamInstanceProfile: !Ref myIamInstanceProfile
+  #     UserData: # sudo reboot
+  #       'Fn::Base64':
+  #         !Sub |
+  #           #!/bin/bash -xe
+  #           cd /home/ec2-user/webservice
+  #           sed -i -e 's/"NAME": "webservice_db"/"NAME": "${DbName}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"USER": "root"/"USER": "${DbName}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"PASSWORD": "abc12345"/"PASSWORD": "${DbPassword}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"HOST": "127.0.0.1"/"HOST": "${myRdsDbInstance.Endpoint.Address}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/AWS_STORAGE_BUCKET_NAME = ""/AWS_STORAGE_BUCKET_NAME = "${MyS3Bucket.Arn}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/arn:aws:s3::://' ./django_project_1/settings.py
+  #           echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
+  #           ls
+  #           sudo reboot
 
 Outputs:
   VpcId:
