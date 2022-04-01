@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CSYE 6225 Assignment 6
+Description: CSYE 6225 Assignment 7
 Parameters:
   VpcCidrBlock:
     Description: CIDR block for VPC
@@ -48,7 +48,7 @@ Parameters:
   DbName:
     Description: RDS DB name, username, and instance identifier
     Type: String
-    Default: csye6225
+    Default: csye62251
   DomainName:
     Description: Domain Name
     Type: String
@@ -323,6 +323,20 @@ Resources:
             Resource:
               - !GetAtt MyS3Bucket.Arn
               - !Join ['', [!GetAtt MyS3Bucket.Arn, '/*']]
+  codeDeployEC2S3IamPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: CodeDeploy-EC2-S3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+            Resource:
+              - !Join ['', ['arn:aws:s3:::eikcaj16.', !Ref Environment]]
+              - !Join ['', ['arn:aws:s3:::eikcaj16.', !Ref Environment, '/*']]
   myIamRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -341,6 +355,7 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - !Ref myIamPolicy
+        - !Ref codeDeployEC2S3IamPolicy
   myIamInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -481,6 +496,57 @@ Resources:
           AliasTarget:
             HostedZoneId: !GetAtt MyAppLoadBalancer.CanonicalHostedZoneID
             DNSName: !GetAtt MyAppLoadBalancer.DNSName
+  MyCodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeDeployServiceRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - 'codedeploy.amazonaws.com'
+                - 'ec2.amazonaws.com'
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+  # MyAppCodeDeploy:
+  #   Type: AWS::CodeDeploy::Application
+  #   Properties:
+  #     ApplicationName: csye6225-webapp
+  #     ComputePlatform: Server
+  MyDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: csye6225-webapp
+      DeploymentGroupName: csye6225-webapp-deployment
+      AutoScalingGroups:
+        - !Ref MyEC2AutoScalingGroup
+      DeploymentStyle:
+        DeploymentType: 'IN_PLACE'
+        DeploymentOption: 'WITHOUT_TRAFFIC_CONTROL'
+      DeploymentConfigName: 'CodeDeployDefault.AllAtOnce'
+      Ec2TagFilters:
+        - Key: Name
+          Type: 'KEY_AND_VALUE'
+          Value: !Ref 'AWS::StackName'
+      Deployment:
+        IgnoreApplicationStopFailures: true
+        Revision:
+          RevisionType: S3
+          S3Location:
+            Bucket: !Join ['', ['eikcaj16.', !Ref Environment]]
+            BundleType: Zip
+            Key: webservice.zip
+      ServiceRoleArn: !GetAtt MyCodeDeployServiceRole.Arn
+      # AutoRollbackConfiguration:
+      #   Enabled: true
+      #   Events:
+      #     - 'DEPLOYMENT_FAILURE'
   # MyEC2Instance:
   #   DependsOn: myRdsDbInstance
   #   Type: 'AWS::EC2::Instance'
