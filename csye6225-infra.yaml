@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CSYE 6225 Assignment 7
+Description: CSYE 6225 Assignment 8
 Parameters:
   VpcCidrBlock:
     Description: CIDR block for VPC
@@ -48,7 +48,7 @@ Parameters:
   DbName:
     Description: RDS DB name, username, and instance identifier
     Type: String
-    Default: csye62251
+    Default: csye6225
   DomainName:
     Description: Domain Name
     Type: String
@@ -356,6 +356,8 @@ Resources:
       ManagedPolicyArns:
         - !Ref myIamPolicy
         - !Ref codeDeployEC2S3IamPolicy
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy'
   myIamInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
