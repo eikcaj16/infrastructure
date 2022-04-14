@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CSYE 6225 Assignment 8
+Description: CSYE 6225 Assignment 9
 Parameters:
   VpcCidrBlock:
     Description: CIDR block for VPC
@@ -308,6 +308,21 @@ Resources:
       DBName: !Ref DbName
       DBSecurityGroups:
         - !Ref myRdsDbSecurityGroup
+  webAppServerlessLambdaPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: EC2-Lambda
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Resource: "*"
+            Action:
+              - 'sns:List*'
+              - 'sns:Get*'
+              - 'sns:Pub*'
+              - "dynamodb:Get*"
+              - "dynamodb:Put*"
   myIamPolicy:
     Type: 'AWS::IAM::ManagedPolicy'
     Properties:
@@ -356,6 +371,7 @@ Resources:
       ManagedPolicyArns:
         - !Ref myIamPolicy
         - !Ref codeDeployEC2S3IamPolicy
+        - !Ref webAppServerlessLambdaPolicy
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
         - 'arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy'
   myIamInstanceProfile:
@@ -549,6 +565,85 @@ Resources:
       #   Enabled: true
       #   Events:
       #     - 'DEPLOYMENT_FAILURE'
+  myDynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - AttributeName: "user_id"
+          AttributeType: "S"
+      KeySchema: 
+        - AttributeName: "user_id"
+          KeyType: "HASH"
+      BillingMode: PAY_PER_REQUEST
+      TableName: csye6225
+      TimeToLiveSpecification: 
+        AttributeName: "expire_time"
+        Enabled: true
+  myLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MyEmailSenderFunction
+      Handler: lambda_function.lambda_handler
+      Role: 
+        Fn::GetAtt: [myLambdaExecutionRole, Arn]
+      Code:
+        S3Bucket: !Ref CodeDeployBucketName
+        S3Key: lambda_handler.zip
+      PackageType: Zip
+      Runtime: python3.6
+      Timeout: 10
+      TracingConfig:
+        Mode: Active
+  myLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
+      RoleName: myLambdaExecutionRole
+  myLambdaExecutionPloicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "ses:SendEmail"
+              - "ses:SendRawEmail"
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+              - "dynamodb:Get*"
+              - "dynamodb:Put*"
+            Resource: "*"
+      PolicyName: "Lambda-Execution-Ploicy"
+      Roles:
+        - !Ref myLambdaExecutionRole
+  LambdaInvokePermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn:  !Ref mySNSTopic 
+      FunctionName: !Ref myLambdaFunction
+
+  mySNSTopic: 
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: csye6225
+      TopicName: csye6225
+      Subscription:  
+      - Endpoint: !GetAtt myLambdaFunction.Arn
+        Protocol: lambda
   # MyEC2Instance:
   #   DependsOn: myRdsDbInstance
   #   Type: 'AWS::EC2::Instance'

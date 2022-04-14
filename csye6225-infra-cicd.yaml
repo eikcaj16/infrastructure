@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CSYE 6225 Assignment 7 - CI/CD
+Description: CSYE 6225 Assignment 9 - CI/CD
 Parameters:
   Environment:
     Description: Environent (dev/prod)
@@ -51,6 +51,7 @@ Resources:
             Action:
               - 'codedeploy:CreateDeployment'
               - 'codedeploy:GetDeployment'
+              - "lambda:Update*"
             Resource:
               - '*'
           - Effect: Allow
