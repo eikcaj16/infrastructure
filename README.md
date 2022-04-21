@@ -10,6 +10,12 @@
 
 ## Usage
 
+0. Import Certificate to ACM 
+
+   ```shell
+   aws acm import-certificate --certificate fileb://[sdn_dn_tld].crt --private-key fileb://[sdn.dn.tld].key  --certificate-chain fileb://[sdn_dn_tld].ca-bundle
+   ```
+
 1. Go to the root directory of the repository.
 
    ```shell
