@@ -53,6 +53,10 @@ Parameters:
     Description: Domain Name
     Type: String
     Default: yiqingjackiehuang.me
+  CertificatesArn:
+    Description: Certificates Arn
+    Type: String
+    Default: 'arn:aws:acm:us-east-1:758806483958:certificate/590cec40-2c5a-4fc5-900d-628304cd7129'
 Resources:
   myVPC:
     Type: 'AWS::EC2::VPC'
@@ -279,13 +283,28 @@ Resources:
         - !Ref myRdsSubnet1
         - !Ref myRdsSubnet2
         - !Ref myRdsSubnet3
-  myRdsDbSecurityGroup:
-    Type: 'AWS::RDS::DBSecurityGroup'
+  myRdsVpcSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for DB (attach )
-      EC2VpcId: !Ref myVPC
-      DBSecurityGroupIngress:
-        - EC2SecurityGroupId: !Ref appSecurityGroup
+      VpcId: !Ref myVPC
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        FromPort: 0
+        ToPort: 0
+        CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref appSecurityGroup
+  # myRdsDbSecurityGroup:
+  #   Type: 'AWS::RDS::DBSecurityGroup'
+  #   Properties:
+  #     GroupDescription: Security Group for DB (attach )
+  #     EC2VpcId: !Ref myVPC
+  #     DBSecurityGroupIngress:
+  #       - EC2SecurityGroupId: !Ref appSecurityGroup
   myRdsDbParameterGroup:
     Type: 'AWS::RDS::DBParameterGroup'
     Properties:
@@ -306,8 +325,11 @@ Resources:
       DBSubnetGroupName: !Ref myRdsDbSubnetGroup
       PubliclyAccessible: false
       DBName: !Ref DbName
-      DBSecurityGroups:
-        - !Ref myRdsDbSecurityGroup
+      StorageEncrypted: True
+      KmsKeyId: !GetAtt myRdsKey.Arn
+      VPCSecurityGroups: [!Ref myRdsVpcSecurityGroup]
+      # DBSecurityGroups:
+      #   - !Ref myRdsDbSecurityGroup
   webAppServerlessLambdaPolicy:
     Type: 'AWS::IAM::ManagedPolicy'
     Properties:
@@ -381,38 +403,75 @@ Resources:
       Path: /
       Roles:
         - !Ref myIamRole
-  MyEC2LaunchConfig:
-    # DependsOn: myRdsDbInstance
-    Type: AWS::AutoScaling::LaunchConfiguration
+  MyEC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchConfigurationName: asg_launch_config
-      BlockDeviceMappings:
+      LaunchTemplateName: !Sub '${AWS::StackName}-asg-launch-template'
+      LaunchTemplateData:
+        BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeType: gp2
             DeleteOnTermination: 'true'
             VolumeSize: '20'
-      ImageId: !Ref AmiId
-      InstanceType: t2.micro
-      KeyName: csye6225_aws
-      AssociatePublicIpAddress: True
-      IamInstanceProfile: !Ref myIamInstanceProfile
-      SecurityGroups:
-        - !Ref appSecurityGroup
-      UserData: # sudo reboot
-        'Fn::Base64':
-          !Sub |
-            #!/bin/bash -xe
-            cd /home/ec2-user/webservice
-            sed -i -e 's/"NAME": "webservice_db"/"NAME": "${DbName}"/' ./django_project_1/settings.py
-            sed -i -e 's/"USER": "root"/"USER": "${DbName}"/' ./django_project_1/settings.py
-            sed -i -e 's/"PASSWORD": "abc12345"/"PASSWORD": "${DbPassword}"/' ./django_project_1/settings.py
-            sed -i -e 's/"HOST": "127.0.0.1"/"HOST": "${myRdsDbInstance.Endpoint.Address}"/' ./django_project_1/settings.py
-            sed -i -e 's/AWS_STORAGE_BUCKET_NAME = ""/AWS_STORAGE_BUCKET_NAME = "${MyS3Bucket.Arn}"/' ./django_project_1/settings.py
-            sed -i -e 's/arn:aws:s3::://' ./django_project_1/settings.py
-            echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
-            ls
-            sudo reboot
+            Encrypted: True
+            KmsKeyId: !GetAtt myEbsKey.Arn
+        ImageId: !Ref AmiId
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !Ref appSecurityGroup
+        IamInstanceProfile:
+          Name: !Ref myIamInstanceProfile
+        UserData: # sudo reboot
+          'Fn::Base64':
+            !Sub |
+              #!/bin/bash -xe
+              cd /home/ec2-user/webservice
+              wget https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem
+              sed -i -e 's/"NAME": "webservice_db"/"NAME": "${DbName}"/' ./django_project_1/settings.py
+              sed -i -e 's/"USER": "root"/"USER": "${DbName}"/' ./django_project_1/settings.py
+              sed -i -e 's/"PASSWORD": "abc12345"/"PASSWORD": "${DbPassword}"/' ./django_project_1/settings.py
+              sed -i -e 's/"HOST": "127.0.0.1"/"HOST": "${myRdsDbInstance.Endpoint.Address}",\n        "OPTIONS": {"ssl": {"ssl-ca": "\/home\/ec2-user\/webservice\/us-east-1-bundle.pem"}}/' ./django_project_1/settings.py
+              sed -i -e 's/AWS_STORAGE_BUCKET_NAME = ""/AWS_STORAGE_BUCKET_NAME = "${MyS3Bucket.Arn}"/' ./django_project_1/settings.py
+              sed -i -e 's/arn:aws:s3::://' ./django_project_1/settings.py
+              echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
+              ls
+              sudo reboot
+  # MyEC2LaunchConfig:
+  #   # DependsOn: myRdsDbInstance
+  #   Type: AWS::AutoScaling::LaunchConfiguration
+  #   Properties:
+  #     LaunchConfigurationName: asg_launch_config
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeType: gp2
+  #           DeleteOnTermination: 'true'
+  #           VolumeSize: '20'
+  #           Encrypted: True
+  #           # KmsKeyId: 'arn:aws:kms:us-east-1:758806483958:key/02721b19-8c80-4d1a-afec-604173764147'
+  #           KmsKeyId: !GetAtt myEbsKey.Arn
+  #     ImageId: !Ref AmiId
+  #     InstanceType: t2.micro
+  #     KeyName: csye6225_aws
+  #     AssociatePublicIpAddress: True
+  #     IamInstanceProfile: !Ref myIamInstanceProfile
+  #     SecurityGroups:
+  #       - !Ref appSecurityGroup
+  #     UserData: # sudo reboot
+  #       'Fn::Base64':
+  #         !Sub |
+  #           #!/bin/bash -xe
+  #           cd /home/ec2-user/webservice
+  #           sed -i -e 's/"NAME": "webservice_db"/"NAME": "${DbName}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"USER": "root"/"USER": "${DbName}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"PASSWORD": "abc12345"/"PASSWORD": "${DbPassword}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/"HOST": "127.0.0.1"/"HOST": "${myRdsDbInstance.Endpoint.Address}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/AWS_STORAGE_BUCKET_NAME = ""/AWS_STORAGE_BUCKET_NAME = "${MyS3Bucket.Arn}"/' ./django_project_1/settings.py
+  #           sed -i -e 's/arn:aws:s3::://' ./django_project_1/settings.py
+  #           echo "DB_Username=${DbName}\nDB_pw=${DbPassword}\nDB_hostname=${myRdsDbInstance.Endpoint.Address}\nS3_bucket=${MyS3Bucket.Arn}" >> info.txt
+  #           ls
+  #           sudo reboot
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -448,6 +507,7 @@ Resources:
   MyEC2AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      AutoScalingGroupName: !Sub ${AWS::StackName}-asg
       MinSize: 1
       MaxSize: 5
       Cooldown: 60
@@ -457,7 +517,10 @@ Resources:
         # - !Ref mySubnet2
       AvailabilityZones:
         - us-east-1a
-      LaunchConfigurationName: !Ref MyEC2LaunchConfig
+      # LaunchConfigurationName: !Ref MyEC2LaunchConfig
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyEC2LaunchTemplate
+        Version: !GetAtt MyEC2LaunchTemplate.LatestVersionNumber
       TargetGroupARNs:
         - !Ref MyAppLoadBalancerTargetGroup
       Tags:
@@ -492,8 +555,25 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref MyAppLoadBalancerTargetGroup
       LoadBalancerArn: !Ref MyAppLoadBalancer
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificatesArn
+  MyAppLoadBalancerListenerHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+     DefaultActions:
+       - Type: "redirect"
+         RedirectConfig:
+           Protocol: "HTTPS"
+           Port: 443
+           Host: "#{host}"
+           Path: "/#{path}"
+           Query: "#{query}"
+           StatusCode: "HTTP_301"
+     LoadBalancerArn: !Ref MyAppLoadBalancer
+     Port: 80
+     Protocol: "HTTP"
   MyAppLoadBalancerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -635,7 +715,6 @@ Resources:
       Principal: sns.amazonaws.com
       SourceArn:  !Ref mySNSTopic 
       FunctionName: !Ref myLambdaFunction
-
   mySNSTopic: 
     Type: AWS::SNS::Topic
     Properties: 
@@ -644,6 +723,101 @@ Resources:
       Subscription:  
       - Endpoint: !GetAtt myLambdaFunction.Arn
         Protocol: lambda
+  myEbsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: !Join ['', [!Ref myVPC, '-my-ebs-key']]
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join ['', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':root']]
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow access through EBS for all principals in the account that are authorized to use EBS
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref 'AWS::AccountId'
+                kms:ViaService: !Join ['.', ['ec2', !Ref AWS::Region, 'amazonaws', 'com']]
+          - Sid: Allow direct access to key metadata to the account
+            Effect: Allow
+            Principal:
+              AWS: !Join ['', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':root']]
+            Action:
+              - kms:Describe*
+              - kms:Get*
+              - kms:List*
+              - kms:RevokeGrant
+            Resource: "*"
+  myRdsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: !Join ['', [!Ref myVPC, '-my-rds-key']]
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join ['', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':root']]
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow access through EBS for all principals in the account that are authorized to use EBS
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref 'AWS::AccountId'
+                kms:ViaService: !Join ['.', ['ec2', !Ref AWS::Region, 'amazonaws', 'com']]
+          - Sid: Allow direct access to key metadata to the account
+            Effect: Allow
+            Principal:
+              AWS: !Join ['', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':root']]
+            Action:
+              - kms:Describe*
+              - kms:Get*
+              - kms:List*
+              - kms:RevokeGrant
+            Resource: "*"
+  # myEbsKey:
+  # Type: 'AWS::KMS::Key'
+  # Properties:
+  #   Description: An example symmetric KMS key
+  #   EnableKeyRotation: true
+  #   PendingWindowInDays: 7
+  #   KeyPolicy:
+  #     Version: 2012-10-17
+  #     Id: !Ref myVPC
+  #     Statement:
+  #       - Sid: Enable IAM User Permissions
+  #         Effect: Allow
+  #         Principal:
+  #           AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+  #         Action: 'kms:*'
+  #         Resource: '*'
+
   # MyEC2Instance:
   #   DependsOn: myRdsDbInstance
   #   Type: 'AWS::EC2::Instance'
